@@ -161,11 +161,13 @@ async function streamAndRender(aiBlock) {
 function parseRawLocally(raw) {
   const chunks    = [];
   const artifacts = [];
+  const usedNames = new Set();
 
   const artifactRe = /\[ARTEFATO:\s*tipo=(\w+)\s+titulo="([^"]+)"\]/gi;
   let m;
   while ((m = artifactRe.exec(raw)) !== null) {
-    artifacts.push({ type: m[1].toLowerCase(), title: m[2] });
+    artifacts.push({ type: m[1].toLowerCase(), title: m[2], content: "" });
+    usedNames.add(m[2]);
   }
 
   const clean   = raw.replace(/\[ARTEFATO:[^\]]+\]/gi, "").trim();
@@ -177,10 +179,13 @@ function parseRawLocally(raw) {
     const before = clean.slice(lastEnd, codeMatch.index).trim();
     if (before) chunks.push({ type: "text", content: before });
 
-    const lang     = codeMatch[1].trim().toLowerCase() || inferLang(codeMatch[2]);
-    const code     = codeMatch[2].trim();
-    const filename = extractFilename(code);
+    const lang = codeMatch[1].trim().toLowerCase() || inferLang(codeMatch[2]);
+    const code = codeMatch[2].trim();
+    const suggested = extractFilename(code);
+    const filename = uniqueFilename(resolveFilename(lang, suggested), usedNames);
+
     chunks.push({ type: "code", language: lang, content: code, filename });
+    artifacts.push({ type: lang, title: filename, content: code });
     lastEnd = codeRe.lastIndex;
   }
 
@@ -206,6 +211,51 @@ function inferLang(code) {
     if (score > bestScore) { bestScore = score; best = lang; }
   }
   return best;
+}
+
+function resolveFilename(language, suggested = "") {
+  if (suggested) return suggested;
+  switch (language) {
+    case "html": return "index.html";
+    case "css": return "styles.css";
+    case "javascript": return "script.js";
+    case "typescript": return "app.ts";
+    case "tsx": return "app.tsx";
+    case "jsx": return "app.jsx";
+    case "python": return "main.py";
+    case "bash": return "script.sh";
+    case "powershell": return "script.ps1";
+    case "csharp": return "Program.cs";
+    case "java": return "Main.java";
+    case "cpp": return "main.cpp";
+    case "c": return "main.c";
+    case "go": return "main.go";
+    case "rust": return "main.rs";
+    case "php": return "index.php";
+    case "ruby": return "main.rb";
+    case "dart": return "main.dart";
+    case "kotlin": return "Main.kt";
+    case "swift": return "main.swift";
+    default: return `code.${language || "txt"}`;
+  }
+}
+
+function uniqueFilename(base, used) {
+  if (!used.has(base)) {
+    used.add(base);
+    return base;
+  }
+  const dot = base.lastIndexOf(".");
+  const name = dot >= 0 ? base.slice(0, dot) : base;
+  const ext = dot >= 0 ? base.slice(dot) : "";
+  let counter = 1;
+  let candidate;
+  do {
+    candidate = `${name}-${counter}${ext}`;
+    counter += 1;
+  } while (used.has(candidate));
+  used.add(candidate);
+  return candidate;
 }
 
 function extractFilename(code) {
@@ -299,7 +349,12 @@ function renderCodeBlock(chunk) {
 }
 
 const ARTIFACT_ICONS = {
-  pdf:"PDF", docx:"DOCX", xlsx:"XLSX", csv:"CSV", png:"PNG", pptx:"PPTX",
+  pdf:"PDF", docx:"DOCX", xlsx:"XLSX", csv:"CSV", png:"PNG", pptx:"PPTX", py:"PY",
+  python:"PY", javascript:"JS", typescript:"TS", html:"HTML", css:"CSS",
+  csharp:"CS", java:"JAVA", cpp:"CPP", c:"C", go:"GO", rust:"RS",
+  php:"PHP", ruby:"RB", dart:"DART", kotlin:"KT", swift:"SWIFT",
+  bash:"SH", powershell:"PS", sql:"SQL", json:"JSON", yaml:"YML",
+  xml:"XML", markdown:"MD",
 };
 
 function renderArtifactsPanel(artifacts, content) {
@@ -323,8 +378,9 @@ function renderArtifactsPanel(artifacts, content) {
       <button class="artifact-download-btn" title="Gerar e baixar">Baixar</button>`;
 
     const btn = card.querySelector(".artifact-download-btn");
-    // content capturado via closure — conteúdo exato desta resposta
-    btn.addEventListener("click", () => downloadArtifact(art.type, art.title, content, btn));
+    // Usa o content específico do artefato se disponível, senão o geral
+    const artifactContent = art.content || content;
+    btn.addEventListener("click", () => downloadArtifact(art.type, art.title, artifactContent, btn));
     grid.appendChild(card);
   }
 
@@ -392,10 +448,11 @@ function renderMarkdownText(raw) {
   // Feito ANTES de qualquer escape — protege indentação e quebras de linha
   let safe = raw.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
     const token = `CODEBLOCK_${codeBlocks.length}_END`;
+    const codeLang = (lang || "").trim().toLowerCase() || inferLang(code);
     const ext = {
       python:"py", javascript:"js", typescript:"ts", html:"html",
       css:"css", csharp:"cs", react:"jsx", json:"json", bash:"sh", sql:"sql"
-    }[lang] || lang || "txt";
+    }[codeLang] || codeLang || "txt";
     const escapedCode = code
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
@@ -403,7 +460,7 @@ function renderMarkdownText(raw) {
     codeBlocks.push(
       `<div class="chunk-code" style="margin:8px 0">` +
         `<div class="code-header">` +
-          `<span class="code-lang">${escHtml(lang || "text")}</span>` +
+          `<span class="code-lang">${escHtml(codeLang || "text")}</span>` +
           `<span class="code-filename">codigo.${ext}</span>` +
         `</div>` +
         `<pre class="code-body">${escapedCode}</pre>` +

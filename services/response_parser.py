@@ -1,5 +1,7 @@
 import re
 from dataclasses import dataclass, field
+from typing import List, Tuple
+from services.code_artifact_service import detect_code_artifacts, CodeArtifact
 
 
 @dataclass
@@ -12,9 +14,10 @@ class Chunk:
 
 @dataclass
 class ArtifactIntent:
-    type: str           # pdf | docx | xlsx | csv | png | pptx
+    type: str           # pdf | docx | xlsx | csv | png | pptx | py
     title: str
     status: str = "pending"
+    content: str = ""   # Conteúdo específico para o artefato (usado para py)
 
 
 # Mapa de heurísticas para inferir linguagem quando não declarada
@@ -58,14 +61,14 @@ def extract_filename(code: str) -> str:
     return match.group(1).strip() if match else ""
 
 
-def parse_response(raw: str) -> tuple[list[Chunk], list[ArtifactIntent]]:
+def parse_response(raw: str, conversation_id: str = "", message_id: str = "") -> Tuple[List[Chunk], List[CodeArtifact]]:
     """
     Recebe o texto bruto da LLM e retorna:
     - lista de Chunks (text e code intercalados)
-    - lista de ArtifactIntents detectadas
+    - lista de CodeArtifacts detectados
     """
-    chunks: list[Chunk] = []
-    artifact_intents: list[ArtifactIntent] = []
+    chunks: List[Chunk] = []
+    artifact_intents: List[CodeArtifact] = []
 
     # 1. Detecta intenções de artefato
     for match in ARTIFACT_RE.finditer(raw):
@@ -109,5 +112,10 @@ def parse_response(raw: str) -> tuple[list[Chunk], list[ArtifactIntent]]:
     # Se não houve nenhum chunk, retorna o texto limpo como único chunk
     if not chunks:
         chunks.append(Chunk(type="text", content=clean))
+
+    # 3. Detecta artefatos de código automaticamente
+    if conversation_id and message_id:
+        code_artifacts = detect_code_artifacts(chunks, conversation_id, message_id)
+        artifact_intents.extend(code_artifacts)
 
     return chunks, artifact_intents

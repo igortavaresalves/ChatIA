@@ -298,6 +298,14 @@ def generate_pptx(title: str, content: str = "") -> str:
     return path
 
 
+def generate_py(title: str, content: str = "") -> str:
+    """Gera um arquivo Python simples com o conteúdo fornecido."""
+    path = _tmp_path(title, "py")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content.strip())
+    return path
+
+
 GENERATORS = {
     "docx": generate_docx,
     "pdf":  generate_pdf,
@@ -305,6 +313,7 @@ GENERATORS = {
     "csv":  generate_csv,
     "png":  generate_png,
     "pptx": generate_pptx,
+    "py":   generate_py,
 }
 
 MIME_TYPES = {
@@ -314,6 +323,7 @@ MIME_TYPES = {
     "csv":  "text/csv",
     "png":  "image/png",
     "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "py":   "text/x-python",
 }
 
 

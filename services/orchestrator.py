@@ -1,6 +1,8 @@
 import os
+import uuid
 from services.groq_client import chat_completion
-from services.response_parser import parse_response, Chunk, ArtifactIntent
+from services.response_parser import parse_response, Chunk
+from services.code_artifact_service import CodeArtifact
 
 
 def _web_search(question: str) -> list[dict]:
@@ -81,10 +83,14 @@ def process_chat(
     response = chat_completion(augmented, stream=False)
     raw_text = response.choices[0].message.content or ""
 
-    # Parseia chunks e artefatos
-    chunks, artifact_intents = parse_response(raw_text)
+    # Gera IDs para a conversa e mensagem
+    conversation_id = str(uuid.uuid4())  # Em produção, usar ID real da conversa
+    message_id = str(uuid.uuid4())
 
-    return _build_response(chunks, artifact_intents, web_sources, raw_text)
+    # Parseia chunks e artefatos
+    chunks, code_artifacts = parse_response(raw_text, conversation_id, message_id)
+
+    return _build_response(chunks, code_artifacts, web_sources, raw_text)
 
 
 def process_chat_stream(messages: list[dict], use_web: bool = False):
@@ -113,7 +119,7 @@ def process_chat_stream(messages: list[dict], use_web: bool = False):
 
 def _build_response(
     chunks: list[Chunk],
-    artifact_intents: list[ArtifactIntent],
+    code_artifacts: list[CodeArtifact],
     web_sources: list[dict],
     raw: str,
 ) -> dict:
@@ -133,11 +139,18 @@ def _build_response(
         ],
         "artifacts": [
             {
-                "type": a.type,
-                "title": a.title,
+                "type": a.language,  # Usar language como type para compatibilidade
+                "title": a.filename,
                 "status": "ready_to_generate",
+                "content": a.content,
+                "language": a.language,
+                "extension": a.extension,
+                "filename": a.filename,
+                "purpose": a.purpose,
+                "is_final": a.is_final,
+                "version": a.version,
             }
-            for a in artifact_intents
+            for a in code_artifacts
         ],
         "sources": web_sources,
         "meta": {

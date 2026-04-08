@@ -14,6 +14,7 @@ load_dotenv()  # carrega .env
 
 from services.orchestrator import process_chat, process_chat_stream
 from services.artifact_service import generate_artifact, get_mime_type, GENERATORS
+from services.code_artifact_service import generate_file, get_mime_type as get_code_mime_type
 
 app = FastAPI(title="AI Chat", version="1.0.0")
 
@@ -95,18 +96,31 @@ async def chat(req: ChatRequest):
 @app.post("/artifact/generate")
 async def artifact_generate(req: ArtifactRequest):
     """
-    Gera um artefato real (DOCX, PDF, XLSX, CSV, PNG, PPTX) e
+    Gera um artefato real (DOCX, PDF, XLSX, CSV, PNG, PPTX, ou arquivos de código) e
     retorna o arquivo para download direto.
     """
-    if req.type not in GENERATORS:
-        raise HTTPException(400, f"Tipo não suportado: {req.type}. Use: {list(GENERATORS.keys())}")
+    from services.code_artifact_service import LANGUAGE_EXT_MAP
 
-    try:
+    # Verificar se é tipo de código
+    if req.type in LANGUAGE_EXT_MAP:
+        # Criar artefato de código temporário
+        from services.code_artifact_service import create_artifact
+        artifact = create_artifact(
+            conversation_id="temp",
+            message_id="temp",
+            filename=req.title,
+            extension=LANGUAGE_EXT_MAP[req.type],
+            language=req.type,
+            content=req.content,
+        )
+        file_path = generate_file(artifact)
+        mime = get_code_mime_type(artifact.extension)
+    elif req.type in GENERATORS:
         file_path = generate_artifact(req.type, req.title, req.content)
-    except Exception as e:
-        raise HTTPException(500, f"Erro ao gerar artefato: {e}")
+        mime = get_mime_type(req.type)
+    else:
+        raise HTTPException(400, f"Tipo não suportado: {req.type}")
 
-    mime = get_mime_type(req.type)
     filename = Path(file_path).name
 
     return FileResponse(
@@ -120,4 +134,6 @@ async def artifact_generate(req: ArtifactRequest):
 @app.get("/artifact/types")
 async def artifact_types():
     """Lista os tipos de artefato suportados."""
-    return {"types": list(GENERATORS.keys())}
+    from services.code_artifact_service import LANGUAGE_EXT_MAP
+    code_types = list(LANGUAGE_EXT_MAP.keys())
+    return {"types": list(GENERATORS.keys()) + code_types}
