@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark"></div>
+      <span class="logo-text">AI Chat</span>
+    </div>
+
+    <button class="new-chat-btn" id="new-chat-btn">
+      ＋ Nova conversa
+    </button>
+
+    <div class="sidebar-section">Recentes</div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active">Conversa atual</div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="toggle-row">
+        <span>Busca web</span>
+        <button class="pill-toggle" id="web-toggle">
+          <span class="dot"></span>
+          <span>Web OFF</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main">
+
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="model-badge">
+          <span class="dot" id="model-dot"></span>
+          <span id="model-name">llama-3.3-70b-versatile</span>
+        </div>
+      </div>
+      <button class="theme-btn" id="theme-btn" title="Alternar tema">Tema</button>
+    </div>
+
+    <div class="chat-area" id="chat-area">
+      <div class="chat-inner" id="chat-inner">
+
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon"></div>
+          <h2>Como posso ajudar?</h2>
+          <p>Pergunte qualquer coisa. Posso escrever código, gerar documentos, analisar dados e muito mais.</p>
+          <div class="suggestion-chips">
+            <div class="chip" data-prompt="Escreva um script Python para ler um CSV e gerar um gráfico de barras">Gerar gráfico Python</div>
+            <div class="chip" data-prompt="Crie um relatório PDF com resumo executivo sobre vendas do trimestre">Relatório PDF</div>
+            <div class="chip" data-prompt="Monte uma planilha Excel com dados de estoque de 5 produtos">Planilha Excel</div>
+            <div class="chip" data-prompt="Crie uma apresentação PPTX de 3 slides sobre inteligência artificial">Apresentação PPTX</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <div class="input-inner">
+        <div class="input-box">
+          <textarea
+            id="user-input"
+            rows="1"
+            placeholder="Mensagem…  (Enter para enviar, Shift+Enter para nova linha)"
+          ></textarea>
+          <button class="send-btn" id="send-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+        <p class="input-hint">Enter para enviar · Shift+Enter para quebrar linha · Ative a Busca Web na sidebar para pesquisar em tempo real</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
