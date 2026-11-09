@@ -1,30 +1,28 @@
-# AI Chat — FastAPI + Groq + Download de Artefatos
+# ChatIA
 
-Chat de IA com streaming, renderização de código, busca web e geração/download real de arquivos (PDF, DOCX, XLSX, CSV, PNG, PPTX).
+Chat com IA em tempo real: respostas em streaming, busca na web, renderização de código e geração de arquivos reais (PDF, DOCX, XLSX, CSV, PNG, PPTX) a partir da conversa.
 
----
+> **EN:** AI chat app built with FastAPI and Groq (Llama 3.3 70B). It streams answers token by token, optionally grounds them with web search (Tavily), detects code blocks as versioned artifacts and turns the conversation into downloadable files (PDF, DOCX, XLSX, CSV, PNG, PPTX).
 
-## Estrutura
+## O que ele faz
 
-```
-ai-chat/
-├── app.py                   # FastAPI — endpoints e servidor
-├── requirements.txt
-├── .env.example
-├── services/
-│   ├── groq_client.py       # Encapsula chamadas à Groq API
-│   ├── response_parser.py   # Divide resposta em chunks (texto/código/artefatos)
-│   ├── orchestrator.py      # Orquestra LLM + busca web + parsing
-│   └── artifact_service.py  # Geração real de DOCX, PDF, XLSX, CSV, PNG, PPTX
-└── static/
-    ├── index.html
-    ├── styles.css
-    └── app.js
-```
+- **Streaming de respostas** via SSE, com renderização progressiva de texto e blocos de código.
+- **Busca web opcional** (Tavily): os resultados entram como contexto do prompt, com fontes.
+- **Artefatos de arquivo**: o modelo só gera um arquivo quando o usuário pede explicitamente ("gere um PDF", "exporta para Excel"). Pesquisar ou resumir nunca dispara geração.
+- **Artefatos de código**: blocos de código são detectados, classificados por linguagem, versionados e ficam prontos para download.
+- **API documentada** pelo FastAPI em `/docs`.
 
----
+## Stack
 
-## Fluxo de dados
+| Camada | Tecnologia |
+|---|---|
+| Backend | Python, FastAPI, Uvicorn |
+| LLM | Groq API, modelo `llama-3.3-70b-versatile` |
+| Busca web | Tavily |
+| Geração de arquivos | python-docx, openpyxl, reportlab, python-pptx, matplotlib |
+| Frontend | HTML, CSS e JavaScript puro (sem build) |
+
+## Como funciona
 
 ```mermaid
 sequenceDiagram
@@ -45,7 +43,7 @@ sequenceDiagram
     B->>G: chat.completions (stream)
     G-->>F: tokens SSE
     F->>F: renderiza texto progressivo
-    Note over F,B: Após stream completo...
+    Note over F,B: Após o stream completo
     F->>B: POST /chat (stream=false)
     B->>G: chat.completions
     G-->>B: resposta completa
@@ -53,67 +51,66 @@ sequenceDiagram
     P-->>B: chunks + artifact_intents
     B-->>F: JSON estruturado
     F->>F: renderiza chunks + artefatos
-    U->>F: clica "Baixar" em artefato
+    U->>F: clica "Baixar" em um artefato
     F->>B: POST /artifact/generate
     B->>A: generate_artifact(type, title)
     A-->>B: caminho do arquivo
     B-->>F: FileResponse (download)
-    F->>U: arquivo salvo no browser
 ```
 
----
+### Decisões de projeto
+
+- **Orquestração separada do cliente LLM.** `orchestrator.py` junta busca web, chamada ao modelo e parsing. `groq_client.py` só fala com a API, então trocar de provedor mexe em um arquivo.
+- **O modelo sinaliza, o backend executa.** O prompt de sistema manda o LLM acrescentar uma linha `[ARTEFATO: tipo=pdf titulo="..."]` apenas quando há pedido explícito. O `response_parser.py` extrai essa intenção e o `artifact_service.py` gera o arquivo de verdade. Assim a resposta continua texto e o arquivo é criado por código determinístico.
+- **Parser de blocos.** A resposta é dividida em chunks de texto e código, com detecção de linguagem por marcação do bloco e por heurística quando ela não é declarada.
+- **Falhas de busca não derrubam o chat.** Erros do Tavily (chave inválida, limite de uso, consulta vazia) são tratados e a conversa segue sem contexto web.
+
+## Estrutura
+
+```
+ChatIA/
+├── app.py                        # FastAPI: endpoints e servidor
+├── requirements.txt
+├── env.example
+├── services/
+│   ├── groq_client.py            # chamadas à Groq e prompt de sistema
+│   ├── orchestrator.py           # LLM + busca web + parsing
+│   ├── response_parser.py        # divide a resposta em texto, código e intenções de artefato
+│   ├── code_artifact_service.py  # detecção, versionamento e entrega de artefatos de código
+│   └── artifact_service.py       # geração de DOCX, PDF, XLSX, CSV, PNG e PPTX
+└── static/
+    ├── index.html
+    ├── styles.css
+    └── app.js
+```
 
 ## Como rodar
 
-### 1. Clone / copie os arquivos
-
 ```bash
-cd ai-chat
-```
+git clone https://github.com/igortavaresalves/ChatIA.git
+cd ChatIA
 
-### 2. Crie o ambiente virtual e instale dependências
-
-```bash
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
+cp env.example .env             # Windows: copy env.example .env
 ```
 
-### 3. Configure as chaves de API
+Preencha o `.env`:
 
-```bash
-cp .env.example .env
+```
+GROQ_API_KEY=...      # https://console.groq.com
+TAVILY_API_KEY=...    # https://app.tavily.com (opcional, habilita a busca web)
 ```
 
-Edite `.env`:
-```
-GROQ_API_KEY=gsk_...      # https://console.groq.com
-TAVILY_API_KEY=tvly-...   # https://app.tavily.com  (opcional, para busca web)
-```
-
-### 4. Rode o servidor
+Suba o servidor:
 
 ```bash
 uvicorn app:app --reload
 ```
 
-Acesse: **http://localhost:8000**
-
----
-
-## Onde evoluir
-
-| O que evoluir | Onde |
-|---|---|
-| Trocar o modelo LLM | `services/groq_client.py`: `GROQ_MODEL` |
-| Mudar o prompt do sistema | `services/groq_client.py`: `SYSTEM_PROMPT` |
-| Adicionar novo tipo de artefato | `services/artifact_service.py`: `GENERATORS` |
-| Melhorar geração de PDF/DOCX | `services/artifact_service.py`: `generate_pdf()` / `generate_docx()` |
-| Salvar histórico em banco | `services/orchestrator.py` + novo `db_service.py` |
-| Migrar frontend para React | `static/app.js`: estrutura já separada por responsabilidade |
-| Adicionar auth | `app.py`: middleware FastAPI + JWT |
-
----
+Acesse http://localhost:8000.
 
 ## Endpoints
 
@@ -122,10 +119,11 @@ Acesse: **http://localhost:8000**
 | `GET` | `/` | Página do chat |
 | `GET` | `/health` | Status da API |
 | `POST` | `/chat` | Chat (stream ou JSON) |
-| `POST` | `/artifact/generate` | Gera e baixa artefato |
-| `GET` | `/artifact/types` | Lista tipos suportados |
+| `POST` | `/artifact/generate` | Gera e baixa um artefato |
+| `GET` | `/artifact/types` | Lista os tipos suportados |
 
-### Exemplo de body `/chat`
+Exemplo de corpo do `/chat`:
+
 ```json
 {
   "messages": [{"role": "user", "content": "Crie um relatório PDF sobre vendas"}],
@@ -134,7 +132,8 @@ Acesse: **http://localhost:8000**
 }
 ```
 
-### Exemplo de body `/artifact/generate`
+Exemplo de corpo do `/artifact/generate`:
+
 ```json
 {
   "type": "pdf",
@@ -142,3 +141,14 @@ Acesse: **http://localhost:8000**
   "content": "Conteúdo opcional para incluir no arquivo"
 }
 ```
+
+## Próximos passos
+
+- Persistir o histórico de conversas em banco de dados.
+- Autenticação (middleware FastAPI com JWT).
+- Testes automatizados para o parser de respostas e para os geradores de arquivo.
+- Migrar o frontend para React e TypeScript.
+
+## Autor
+
+Igor Tavares, desenvolvedor backend e de soluções com IA, Recife (PE). [GitHub](https://github.com/igortavaresalves)
